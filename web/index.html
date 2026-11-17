@@ -101,7 +101,9 @@ $('#btnPreview').onclick=async()=>{
   try{
     const r=await call('/preview',{url,proxy:$('#addProxy').value.trim()||undefined})
     $('#btnPreview').disabled=false
-    if(!r.ok){$('#previewBox').innerHTML='';$('#previewErr').textContent=r.error||'分析失败';if(r.rawTail)$('#previewErr').textContent+=' | 模型输出尾:'+r.rawTail.slice(-200);return}
+    if(!r.ok){$('#previewBox').innerHTML='';let m=esc(r.error||'分析失败');if(r.rawTail)m+=' | 模型输出尾:'+esc(r.rawTail.slice(-200))
+      if(r.needsAuth)m+=` <button class="sm primary" onclick="openAuth('${esc(url)}')">打开浏览器登录</button>`
+      $('#previewErr').innerHTML=m;return}
     PENDING_PREVIEW={url,label:$('#addLabel').value.trim(),rule:r.rule,proxy:$('#addProxy').value.trim()||undefined}
     renderPreview(r)
   }catch(e){$('#btnPreview').disabled=false;$('#previewBox').innerHTML='';$('#previewErr').textContent=String(e)}
@@ -140,15 +142,17 @@ function renderPreview(r){
 }
 
 /* ---------- 站点列表 ---------- */
-const ST={active:['ok','正常'],degraded:['warn','疑似改版'],rules_pending:['warn','待确认新规则'],disabled:['','已停用']}
+const ST={active:['ok','正常'],degraded:['warn','疑似改版'],rules_pending:['warn','待确认新规则'],auth_required:['warn','需登录'],disabled:['','已停用']}
+window.openAuth=async(url)=>{const r=await call('/open-auth?url='+encodeURIComponent(url));alert(r.ok?'已在浏览器中打开授权页，登录后回来重试':'打开失败（browserFetch 不可用）')}
 function siteCard(s){
   const[cls,txt]=ST[s.status]||['','?']
   const regions=s.rules.type==='css'&&s.rules.regions?s.rules.regions.map(r=>`<span class="chip">${esc(r.label)}</span>`).join(''):`<span class="chip">${esc(s.rules.type)}</span>`
   const pend=s.pendingRules?`<div class="notice">有新规则待确认（疑似改版后重新分析结果） <button class="sm primary" onclick="confirmRules(${s.id})">查看并确认</button> <button class="sm" onclick="op(${s.id},'reject-rules')">拒绝</button></div>`:''
+  const auth=s.status==='auth_required'?` <button class="sm primary" onclick="openAuth('${esc(s.url)}')">去登录</button>`:''
   return `<div class="region">
     <div class="site-head">
       <b>${esc(s.label||s.url)}</b>
-      <span class="chip ${cls}">${txt}</span>
+      <span class="chip ${cls}">${txt}</span>${auth}
       ${s.transport!=='node'?`<span class="chip">${s.transport}</span>`:''}
       ${s.proxy?`<span class="chip warn">代理</span>`:''}
       ${regions}

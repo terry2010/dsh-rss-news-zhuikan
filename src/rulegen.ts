@@ -23,7 +23,23 @@ export interface PreviewOk {
   groups: PreviewGroup[]
   total: number
 }
-export type PreviewResult = PreviewOk | { ok: false; error: string; rawTail?: string }
+export type PreviewResult = PreviewOk | { ok: false; error: string; rawTail?: string; needsAuth?: boolean; pageKind?: string }
+
+/** AI 判页：列表/登录墙/挑战页/空页——小页或抽取 0 条时的兜底判定（正则盖不全登录墙形态）。 */
+export async function classifyPage(
+  llm: LlmLike, url: string, body: string, route?: RouteHint,
+): Promise<'list' | 'login' | 'challenge' | 'empty' | 'other'> {
+  try {
+    const snippet = body.slice(0, 6000)
+    const text = await generateText(llm,
+      `Page URL: ${url}\n\nHTML:\n${snippet}\n\nClassify this page into exactly one word: list (shows a list of links/posts), login (requires login to see content), challenge (bot/verification page), empty (blank/error/other). Reply ONLY the word.`,
+      { maxTokens: 16, temperature: 0, route })
+    const w = text.trim().toLowerCase().replace(/[^a-z]/g, '')
+    return (['list', 'login', 'challenge', 'empty'] as const).includes(w as 'list') ? (w as 'list') : 'other'
+  } catch {
+    return 'other'
+  }
+}
 
 const SYS = `You generate extraction rules for subscribing to a web list page. Output STRICT JSON only, no prose.
 Rule shapes (pick exactly one "type"):

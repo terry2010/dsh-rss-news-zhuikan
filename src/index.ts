@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { mountUi, type WebServerLike } from './ui.js'
 import { hasService, markSeenMain, mountDepRoutes } from './dep-prompt.js'
-import { getDoc, markAuth, looksLikeChallenge, type BrowserFetchLike } from './transport.js'
+import { getDoc, markAuth, looksLikeChallenge, looksLikeLogin, type BrowserFetchLike } from './transport.js'
 import { extract, type ZkItem } from './extract.js'
 import { generateRule } from './rulegen.js'
 import { decidePush } from './match.js'
@@ -170,14 +170,21 @@ function bootstrap(ctx: Context, log: Log) {
     if ('error' in doc) throw new Error(`fetch ${fetchUrl}: ${doc.error}`)
     if (looksLikeChallenge(doc.body ?? '', doc.status)) {
       markAuth(bf, host(fetchUrl))
-      throw new Error(`challenge/login wall at ${fetchUrl} (${doc.status})`)
+      throw new Error(`challenge wall at ${fetchUrl} (${doc.status})`)
     }
+    if (looksLikeLogin(doc.body ?? '', doc.status)) {
+      markAuth(bf, host(fetchUrl))
+      db.updateSite(site.id, { status: 'auth_required', last_poll_at: new Date(nowMs).toISOString() })
+      throw new Error(`login wall at ${fetchUrl} (${doc.status})`)
+    }
+    markAuth(bf, host(fetchUrl), false) // 拿到真页面 → 清登录标
     const firstEver = !db.hasBaseline(site.id)
     const res = extract(rule, doc.body ?? '', site.url)
     const patch: Parameters<typeof db.updateSite>[1] = {
       last_poll_at: new Date(nowMs).toISOString(),
       last_items: res.items.length,
     }
+    if (doc.transport && doc.transport !== site.transport_level) patch.transport_level = doc.transport
     if (res.items.length) {
       patch.zero_streak = 0
       patch.last_ok_at = new Date(nowMs).toISOString()
@@ -195,18 +202,34 @@ function bootstrap(ctx: Context, log: Log) {
   }
 
   // ---- 预览/重分析（UI 调用）----
-  const fetchPage = async (url: string, proxy?: string): Promise<{ ok: true; body: string } | { ok: false; error: string }> => {
+  const fetchPage = async (url: string, proxy?: string): Promise<{ ok: true; body: string; transport?: string } | { ok: false; error: string }> => {
     const doc = await getDoc(mctx(url), bf, host(url), url, { proxy })
     if ('error' in doc) return { ok: false, error: `fetch failed: ${doc.error}` }
-    if (looksLikeChallenge(doc.body ?? '', doc.status)) return { ok: false, error: `page blocked (${doc.status}): likely login/challenge` }
-    return { ok: true, body: doc.body ?? '' }
+    if (looksLikeChallenge(doc.body ?? '', doc.status)) return { ok: false, error: `page blocked (${doc.status}, transport=${doc.transport ?? '?'}): challenge` }
+    if (looksLikeLogin(doc.body ?? '', doc.status)) {
+      markAuth(bf, host(url))
+      return { ok: false, error: 'login_wall', needsAuth: true } as { ok: false; error: string }
+    }
+    markAuth(bf, host(url), false)
+    return { ok: true, body: doc.body ?? '', transport: doc.transport }
   }
   const preview = async (url: string, proxy?: string) => {
     if (!llm) return { ok: false as const, error: 'LLM service unavailable — configure a model provider first' }
     const page = await fetchPage(url, proxy)
     if (!page.ok) return page
     if (bf) bf.declareDomains(name, [...new Set([...domains(), host(url)])])
-    return generateRule(llm, url, page.body, { log, route: routeHint() })
+    // 小页先 AI 判页——登录墙/空页不白烧两轮 rulegen
+    if (page.body.length < 6000) {
+      const { classifyPage } = await import('./rulegen.js')
+      const kind = await classifyPage(llm, url, page.body, routeHint())
+      if (kind !== 'list' && kind !== 'other') {
+        if (kind === 'login') markAuth(bf, host(url))
+        return { ok: false as const, error: `page classified as ${kind} — not a list page`, needsAuth: kind === 'login', pageKind: kind }
+      }
+    }
+    const r = await generateRule(llm, url, page.body, { log, route: routeHint() })
+    if (!r.ok) return { ...r, transport: page.transport, bodyLen: page.body.length }
+    return { ...r, transport: page.transport }
   }
   const domains = () => db.sites().map((s) => host(s.url))
   const reanalyze = async (siteId: number) => {
@@ -248,6 +271,23 @@ function bootstrap(ctx: Context, log: Log) {
   ctx.inject(['webServer'], (c) => {
     const dispose = mountUi((c as unknown as { webServer: WebServerLike }).webServer, {
       db, log, preview, syncSources, kickSite, reanalyze, llmReady: () => llm !== undefined, llmTest,
+      openAuth: async (domain, url) => {
+        if (!bf?.openForAuth) return false
+        bf.declareDomains(name, [domain])
+        return bf.openForAuth(domain, url)
+      },
+      fetchTest: async (url, proxy) => {
+        if (!/^https?:\/\//.test(url)) return { ok: false, error: 'bad url' }
+        if (bf) bf.declareDomains(name, [host(url)])
+        const doc = await getDoc(mctx(url), bf, host(url), url, { proxy })
+        if ('error' in doc) return { ok: false, error: doc.error }
+        return {
+          ok: true, transport: doc.transport, status: doc.status,
+          bodyLen: (doc.body ?? '').length,
+          challenge: looksLikeChallenge(doc.body ?? '', doc.status),
+          head: (doc.body ?? '').slice(0, 400),
+        }
+      },
     })
     c.effect(() => dispose)
   })

@@ -58,6 +58,7 @@ function readBody(req: Req): Promise<string> {
     req.on('end', () => resolve(s))
   })
 }
+const hostOf = (u: string) => { try { return new URL(u).hostname } catch { return '' } }
 const json = (res: Res, code: number, body: unknown) => {
   res.statusCode = code
   res.setHeader('content-type', 'application/json; charset=utf-8')
@@ -86,6 +87,10 @@ export interface UiDeps {
   llmReady: () => boolean
   /** LLM 通路探针（小 prompt，秒级回） */
   llmTest?: () => Promise<{ ok: boolean; route?: string; text?: string; ms?: number; error?: string }>
+  /** 抓取探针：只拉页不调 LLM，返回 transport/status/body 头 */
+  fetchTest?: (url: string, proxy?: string) => Promise<Record<string, unknown>>
+  /** 登录墙 → 专用 Chrome 前台开授权页 */
+  openAuth?: (domain: string, url: string) => Promise<boolean>
 }
 
 export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
@@ -167,6 +172,11 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
             db.updateSite(site.id, { interval_s: s })
             break
           }
+          case 'open-auth': {
+            if (!deps.openAuth) return json(res, 501, { ok: false, error: 'browserFetch not available' })
+            const ok2 = await deps.openAuth(hostOf(site.url), site.url)
+            return json(res, 200, { ok: ok2 })
+          }
           case 'reanalyze': {
             const r = await deps.reanalyze(site.id)
             return json(res, 200, { ok: r.ok, error: r.error, groups: r.groups, site: siteOut(db, db.site(site.id)!) })
@@ -214,6 +224,25 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
       handler: guard(async (_q, res) => {
         if (!deps.llmTest) return json(res, 501, { ok: false, error: 'no probe' })
         json(res, 200, await deps.llmTest())
+      }),
+    }),
+
+    ws.register({
+      kind: 'exact', path: `${BASE}/api/fetch-test`,
+      handler: guard(async (req, res) => {
+        if (!deps.fetchTest) return json(res, 501, { ok: false })
+        const u = new URL(req.url || '', 'http://x')
+        json(res, 200, await deps.fetchTest(u.searchParams.get('url') || '', u.searchParams.get('proxy') || undefined))
+      }),
+    }),
+
+    ws.register({
+      kind: 'exact', path: `${BASE}/api/open-auth`,
+      handler: guard(async (req, res) => {
+        if (!deps.openAuth) return json(res, 501, { ok: false, error: 'browserFetch not available' })
+        const u = new URL(req.url || '', 'http://x')
+        const url = u.searchParams.get('url') || ''
+        json(res, 200, { ok: await deps.openAuth(hostOf(url), url) })
       }),
     }),
 
