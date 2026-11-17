@@ -96,9 +96,11 @@ function bootstrap(ctx: Context, log: Log) {
 
   const mctx = (url: string): MethodCtx => ({ fetch: fetcher, log: log as MethodCtx['log'], signal: undefined, kv: { get: () => undefined, set: () => {} } })
 
-  // ---- 主插件源同步：removeSources 整 provider 重写（单站无法单独删） ----
-  const syncSources = async () => {
-    await ctx.rndSources.removeSources(name)
+  // ---- 主插件源同步：addSources 是 upsert（不动条目、保留用户可编辑字段）——
+  //   常规同步只 addSources；removeSources 会连带删光本 provider 全部条目，
+  //   只在「删站/改名需要让主插件源消失或改标题」时才走删+重加（条目下轮重抓补回）。
+  const syncSources = async (opts?: { rebuild?: boolean }) => {
+    if (opts?.rebuild) await ctx.rndSources.removeSources(name)
     const defs: SourceDef[] = db.sites().filter((s) => s.enabled === 1).map((s) => ({
       url: s.url, title: s.label || s.url, method: METHOD,
       category: '追看', tier: 2, lang: 'zh', enabled: true,

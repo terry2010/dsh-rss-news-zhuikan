@@ -81,7 +81,7 @@ export interface UiDeps {
   startPreview: (url: string, proxy?: string) => number
   jobStatus: (id: number) => { step: number; total: number; label: string; done: boolean; result?: PreviewResult | { ok: false; error: string } } | undefined
   /** 站点启用/词表变更后主插件源同步 */
-  syncSources: () => Promise<void>
+  syncSources: (opts?: { rebuild?: boolean }) => Promise<void>
   /** 站点启用后立即跑一轮（基线入库） */
   kickSite: (siteId: number) => void
   /** 重新分析（规则腐化/手动）→ pending_rules */
@@ -178,8 +178,10 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
         switch (b.op) {
           case 'enable': db.updateSite(site.id, { enabled: 1, status: site.status === 'disabled' ? 'active' : site.status }); break
           case 'disable': db.updateSite(site.id, { enabled: 0, status: 'disabled' }); break
-          case 'remove': db.removeSite(site.id); await deps.syncSources(); return json(res, 200, { ok: true })
-          case 'relabel': db.updateSite(site.id, { label: String(b.label ?? site.label) }); await deps.syncSources(); break
+          // remove/relabel 需要主插件源消失或换标题（title 是 upsert 保留字段）——只能走 rebuild；
+          // 代价是 provider 条目被连带清掉，下轮重抓补回
+          case 'remove': db.removeSite(site.id); await deps.syncSources({ rebuild: true }); return json(res, 200, { ok: true })
+          case 'relabel': db.updateSite(site.id, { label: String(b.label ?? site.label) }); await deps.syncSources({ rebuild: true }); break
           case 'proxy': {
             const v = String(b.proxy ?? '').trim()
             db.updateSite(site.id, { proxy: (v === '1' || v === 'true') ? '1' : (v || null) as never })
