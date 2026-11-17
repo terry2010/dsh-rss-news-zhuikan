@@ -138,13 +138,14 @@ function renderPreview(r){
     <span class="grow"></span>
     <button class="primary" id="btnConfirm">启用订阅 →</button></div>`
   $('#previewBox').innerHTML=h
-  const sync=()=>{document.querySelectorAll('.region').forEach(el=>el.classList.toggle('off',!el.querySelector('.rgchk').checked))
-    $('#btnConfirm').disabled=![...document.querySelectorAll('.rgchk')].some(c=>c.checked)}
-  document.querySelectorAll('.rgchk').forEach(c=>c.onchange=sync);sync()
-  if($('#selAll'))$('#selAll').onclick=()=>{document.querySelectorAll('.rgchk').forEach(c=>{c.checked=true});sync()}
-  if($('#selNone'))$('#selNone').onclick=()=>{document.querySelectorAll('.rgchk').forEach(c=>{c.checked=false});sync()}
+  const box=$('#previewBox') // .region 与站点卡共用 class——一切查询限定在预览框内
+  const sync=()=>{box.querySelectorAll('.region').forEach(el=>el.classList.toggle('off',!el.querySelector('.rgchk').checked))
+    $('#btnConfirm').disabled=![...box.querySelectorAll('.rgchk')].some(c=>c.checked)}
+  box.querySelectorAll('.rgchk').forEach(c=>c.onchange=sync);sync()
+  if($('#selAll'))$('#selAll').onclick=()=>{box.querySelectorAll('.rgchk').forEach(c=>{c.checked=true});sync()}
+  if($('#selNone'))$('#selNone').onclick=()=>{box.querySelectorAll('.rgchk').forEach(c=>{c.checked=false});sync()}
   $('#btnConfirm').onclick=async()=>{
-    const picked=[...document.querySelectorAll('.rgchk')].filter(c=>c.checked).map(c=>+c.dataset.i)
+    const picked=[...box.querySelectorAll('.rgchk')].filter(c=>c.checked).map(c=>+c.dataset.i)
     const body={url:PENDING_PREVIEW.url,label:PENDING_PREVIEW.label,rule:PENDING_PREVIEW.rule,regions:picked,proxy:PENDING_PREVIEW.proxy}
     const r2=await call('/site/add',body)
     if(r2.ok){$('#previewBox').innerHTML='<div class="chip ok">已启用，正在做首轮抓取…</div>';PENDING_PREVIEW=null;load()}
