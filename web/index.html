@@ -123,7 +123,7 @@ function renderPreview(r){
   const multi=r.groups.length>1
   let h=`<div class="mut sm" style="margin:10px 0 4px">识别方式：${esc(r.rule.type)} — 找到 ${r.groups.length} 个列表区域，勾选要订阅的：</div>`
   r.groups.forEach((g,i)=>{
-    const samples=g.items.slice(0,10).map(it=>`<li>· ${esc(it.title)}${it.pubTime?` <span class="mut">${esc(it.pubTime)}</span>`:''}</li>`).join('')
+    const samples=g.items.slice(0,10).map(it=>`<li>· ${it.link?`<a href="${esc(it.link)}" target="_blank">${esc(it.title)}</a>`:esc(it.title)}${it.pubTime?` <span class="mut">${esc(it.pubTime)}</span>`:''}</li>`).join('')
     h+=`<div class="region" data-i="${i}">
       <label class="row"><input type="checkbox" class="rgchk" data-i="${i}" checked>
       <b>${esc(g.label||'列表 '+(i+1))}</b>
