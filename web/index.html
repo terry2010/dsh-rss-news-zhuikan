@@ -154,7 +154,13 @@ function renderPreview(r){
 
 /* ---------- 站点列表 ---------- */
 const ST={active:['ok','正常'],degraded:['warn','疑似改版'],rules_pending:['warn','待确认新规则'],auth_required:['warn','需登录'],disabled:['','已停用']}
-window.openAuth=async(url)=>{const r=await call('/open-auth?url='+encodeURIComponent(url));alert(r.ok?'已在浏览器中打开授权页，登录后回来重试':'打开失败（browserFetch 不可用）')}
+window.openAuth=async(url)=>{
+  const r=await call('/open-auth?url='+encodeURIComponent(url))
+  if(!r.ok){alert('打开失败（browserFetch 不可用）');return}
+  // alert 阻塞到用户点确定——登录完回来点确定 = 「我已登录」→ 立即重跑分析
+  alert('已在专用浏览器中打开授权页。\n\n登录完成后回到这里点「确定」，会自动重新分析页面。')
+  if($('#addUrl').value.trim())$('#btnPreview').click()
+}
 window.fetchNow=async(id,url)=>{
   // 走主插件 retry：清冷却+单源抓取（handler 会同时写本插件库和主库——全部新闻可见）
   const r=await fetch('/dsh-rss-news-daily/api/sources/'+encodeURIComponent(url),{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({action:'retry'})}).then(r=>r.json()).catch(e=>({ok:false,error:String(e)}))
