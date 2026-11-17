@@ -152,6 +152,10 @@ function regionContainers($: CheerioAPI, region: RegionRule): Cheerio<AnyNode>[]
     const anchorEl = $(region.anchor.sel).filter((_, el) =>
       $(el).text().includes(region.anchor!.text)).first()
     if (!anchorEl.length) return []
+    // 锚点在容器内（h2「最近更新…」常是 wrap 的标题子节点）：祖先链命中 sel 直接用——
+    // 否则 nextAll 会拿到下一个板块的容器，同构区域整体错位一格
+    const own = anchorEl.parents(region.sel).first()
+    if (own.length) return [own]
     // 就近后继：先平级 nextAll，再父链逐层向上找 nextAll——命中首个含条目匹配的容器
     let scope = anchorEl.nextAll()
     let el = anchorEl.parent()
