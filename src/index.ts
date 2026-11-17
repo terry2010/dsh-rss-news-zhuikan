@@ -217,9 +217,9 @@ function bootstrap(ctx: Context, log: Log) {
   const preview = async (url: string, proxy?: string, onStep?: StepFn) => {
     if (!llm) return { ok: false as const, error: 'LLM service unavailable — configure a model provider first' }
     onStep?.(1, '抓取页面…')
+    if (bf) bf.declareDomains(name, [...new Set([...domains(), host(url)])]) // 白名单须在抓页前声明——挑战/壳页升级链要靠它
     const page = await fetchPage(url, proxy)
     if (!page.ok) return page
-    if (bf) bf.declareDomains(name, [...new Set([...domains(), host(url)])])
     // 小页先 AI 判页——登录墙/空页不白烧两轮 rulegen
     if (page.body.length < 6000) {
       onStep?.(2, '页面很小，AI 判定页面类型…')
