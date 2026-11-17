@@ -5,7 +5,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { domainToUnicode, fileURLToPath } from 'node:url'
 import type { ZkDb, SiteRow } from './db.js'
 import type { PreviewResult } from './rulegen.js'
 import type { SiteRule } from './rules.js'
@@ -158,7 +158,7 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
           rule.regions = body.regions.map((i) => rule.regions![i]).filter(Boolean)
           if (!rule.regions.length) return json(res, 400, { ok: false, error: 'pick at least one region' })
         }
-        const id = db.addSite(url, String(body.label ?? '').trim() || new URL(url).hostname, JSON.stringify(rule), 3600, String(body.proxy ?? '').trim() || undefined)
+        const id = db.addSite(url, String(body.label ?? '').trim() || domainToUnicode(new URL(url).hostname), JSON.stringify(rule), 3600, String(body.proxy ?? '').trim() || undefined)
         await deps.syncSources()
         deps.kickSite(id)
         json(res, 200, { ok: true, site: siteOut(db, db.site(id)!) })
