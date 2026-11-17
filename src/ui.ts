@@ -77,7 +77,9 @@ export interface UiDeps {
   db: ZkDb
   log: Log
   /** 预览：拉页面 + rulegen；LLM 缺席时返回错误 */
-  preview: (url: string, proxy?: string) => Promise<PreviewResult | { ok: false; error: string }>
+  /** 起预览任务 → jobId；进度走 jobStatus 轮询 */
+  startPreview: (url: string, proxy?: string) => number
+  jobStatus: (id: number) => { step: number; total: number; label: string; done: boolean; result?: PreviewResult | { ok: false; error: string } } | undefined
   /** 站点启用/词表变更后主插件源同步 */
   syncSources: () => Promise<void>
   /** 站点启用后立即跑一轮（基线入库） */
@@ -125,7 +127,18 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
         if (!/^https?:\/\//.test(url)) return json(res, 400, { ok: false, error: 'url must be http(s)' })
         const proxy = String(body.proxy ?? '').trim() || undefined
         if (proxy && !/^https?:\/\//.test(proxy)) return json(res, 400, { ok: false, error: 'proxy must be http(s)://' })
-        json(res, 200, await deps.preview(url, proxy))
+        json(res, 200, { ok: true, jobId: deps.startPreview(url, proxy) })
+      }),
+    }),
+
+    // 预览进度轮询：GET /api/preview-status?id=N → {step,total,label,done,result?}
+    ws.register({
+      kind: 'exact', path: `${BASE}/api/preview-status`,
+      handler: guard((req, res) => {
+        const u = new URL(req.url || '', 'http://x')
+        const job = deps.jobStatus(Number(u.searchParams.get('id')))
+        if (!job) return json(res, 404, { ok: false, error: 'job gone' })
+        json(res, 200, { ok: true, ...job })
       }),
     }),
 

@@ -96,17 +96,28 @@ $('#btnPreview').onclick=async()=>{
   const url=$('#addUrl').value.trim()
   if(!url)return
   $('#previewErr').textContent=''
-  $('#previewBox').innerHTML='<div class="spin">抓取页面 + AI 分析中（可能 10-30 秒）…</div>'
+  $('#previewBox').innerHTML=''
   $('#btnPreview').disabled=true
+  const setProg=(t)=>{$('#previewErr').innerHTML=t}
   try{
-    const r=await call('/preview',{url,proxy:$('#addProxy').value.trim()||undefined})
+    const r0=await call('/preview',{url,proxy:$('#addProxy').value.trim()||undefined})
+    if(!r0.ok){setProg(esc(r0.error||'启动失败'));$('#btnPreview').disabled=false;return}
+    let job,r
+    for(;;){ // 轮询任务进度：服务端逐步上报
+      await new Promise(s=>setTimeout(s,1500))
+      job=await call('/preview-status?id='+r0.jobId)
+      if(!job.ok){setProg('进度查询失败：'+esc(job.error||''));$('#btnPreview').disabled=false;return}
+      if(!job.done){setProg(`<b>第 ${job.step}/${job.total} 步</b> · ${esc(job.label)}`);continue}
+      r=job.result;break
+    }
     $('#btnPreview').disabled=false
     if(!r.ok){$('#previewBox').innerHTML='';let m=esc(r.error||'分析失败');if(r.rawTail)m+=' | 模型输出尾:'+esc(r.rawTail.slice(-200))
       if(r.needsAuth)m+=` <button class="sm primary" onclick="openAuth('${esc(url)}')">打开浏览器登录</button>`
-      $('#previewErr').innerHTML=m;return}
+      setProg(m);return}
+    setProg('')
     PENDING_PREVIEW={url,label:$('#addLabel').value.trim(),rule:r.rule,proxy:$('#addProxy').value.trim()||undefined}
     renderPreview(r)
-  }catch(e){$('#btnPreview').disabled=false;$('#previewBox').innerHTML='';$('#previewErr').textContent=String(e)}
+  }catch(e){$('#btnPreview').disabled=false;$('#previewBox').innerHTML='';setProg(esc(String(e)))}
 }
 function renderPreview(r){
   const multi=r.groups.length>1
@@ -144,6 +155,10 @@ function renderPreview(r){
 /* ---------- 站点列表 ---------- */
 const ST={active:['ok','正常'],degraded:['warn','疑似改版'],rules_pending:['warn','待确认新规则'],auth_required:['warn','需登录'],disabled:['','已停用']}
 window.openAuth=async(url)=>{const r=await call('/open-auth?url='+encodeURIComponent(url));alert(r.ok?'已在浏览器中打开授权页，登录后回来重试':'打开失败（browserFetch 不可用）')}
+window.fetchNow=async(id,url)=>{
+  // 走主插件 retry：清冷却+单源抓取（handler 会同时写本插件库和主库——全部新闻可见）
+  const r=await fetch('/dsh-rss-news-daily/api/sources/'+encodeURIComponent(url),{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({action:'retry'})}).then(r=>r.json()).catch(e=>({ok:false,error:String(e)}))
+  alert(r.ok?'已触发抓取，片刻后到「全部新闻」查看结果':'触发失败：'+(r.error||'源不存在'))}
 function siteCard(s){
   const[cls,txt]=ST[s.status]||['','?']
   const regions=s.rules.type==='css'&&s.rules.regions?s.rules.regions.map(r=>`<span class="chip">${esc(r.label)}</span>`).join(''):`<span class="chip">${esc(s.rules.type)}</span>`
@@ -163,6 +178,7 @@ function siteCard(s){
     ${pend}
     <div class="row" style="margin-top:6px">
       <button class="sm" onclick="op(${s.id},'${s.enabled?'disable':'enable'}')">${s.enabled?'停用':'启用'}</button>
+      <button class="sm primary" onclick="fetchNow(${s.id},'${esc(s.url)}')">抓取</button>
       <button class="sm" onclick="reanalyze(${s.id})">重新分析</button>
       <button class="sm" onclick="renameSite(${s.id},'${esc(s.label)}')">改名</button>
       <label class="sm mut">间隔 <input type="number" id="iv${s.id}" value="${Math.round(s.intervalS/60)}" min="5"> 分钟

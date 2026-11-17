@@ -213,13 +213,16 @@ function bootstrap(ctx: Context, log: Log) {
     markAuth(bf, host(url), false)
     return { ok: true, body: doc.body ?? '', transport: doc.transport }
   }
-  const preview = async (url: string, proxy?: string) => {
+  type StepFn = (step: number, label: string) => void
+  const preview = async (url: string, proxy?: string, onStep?: StepFn) => {
     if (!llm) return { ok: false as const, error: 'LLM service unavailable — configure a model provider first' }
+    onStep?.(1, '抓取页面…')
     const page = await fetchPage(url, proxy)
     if (!page.ok) return page
     if (bf) bf.declareDomains(name, [...new Set([...domains(), host(url)])])
     // 小页先 AI 判页——登录墙/空页不白烧两轮 rulegen
     if (page.body.length < 6000) {
+      onStep?.(2, '页面很小，AI 判定页面类型…')
       const { classifyPage } = await import('./rulegen.js')
       const kind = await classifyPage(llm, url, page.body, routeHint())
       if (kind !== 'list' && kind !== 'other') {
@@ -227,10 +230,30 @@ function bootstrap(ctx: Context, log: Log) {
         return { ok: false as const, error: `page classified as ${kind} — not a list page`, needsAuth: kind === 'login', pageKind: kind }
       }
     }
+    onStep?.(2, 'AI 生成提取规则…（本地模型 1–3 分钟）')
     const r = await generateRule(llm, url, page.body, { log, route: routeHint() })
     if (!r.ok) return { ...r, transport: page.transport, bodyLen: page.body.length }
+    onStep?.(3, '试抽验证 + 区域分组…')
     return { ...r, transport: page.transport }
   }
+
+  // ---- 预览任务：POST /api/preview 立即回 jobId，前端轮询 preview-status 拿实时进度 ----
+  interface PreviewJob { step: number; total: number; label: string; done: boolean; result?: Awaited<ReturnType<typeof preview>> }
+  const jobs = new Map<number, PreviewJob>()
+  let jobSeq = 0
+  const startPreview = (url: string, proxy?: string) => {
+    const id = ++jobSeq
+    const job: PreviewJob = { step: 0, total: 3, label: '排队中…', done: false }
+    jobs.set(id, job)
+    void (async () => {
+      try { job.result = await preview(url, proxy, (s, l) => { job.step = s; job.label = l }) }
+      catch (e) { job.result = { ok: false, error: String((e as Error)?.message || e) } }
+      job.done = true
+      setTimeout(() => jobs.delete(id), 10 * 60e3).unref?.()
+    })()
+    return id
+  }
+  const jobStatus = (id: number) => jobs.get(id)
   const domains = () => db.sites().map((s) => host(s.url))
   const reanalyze = async (siteId: number) => {
     const site = db.site(siteId)
@@ -270,7 +293,7 @@ function bootstrap(ctx: Context, log: Log) {
   }
   ctx.inject(['webServer'], (c) => {
     const dispose = mountUi((c as unknown as { webServer: WebServerLike }).webServer, {
-      db, log, preview, syncSources, kickSite, reanalyze, llmReady: () => llm !== undefined, llmTest,
+      db, log, startPreview, jobStatus, syncSources, kickSite, reanalyze, llmReady: () => llm !== undefined, llmTest,
       openAuth: async (domain, url) => {
         if (!bf?.openForAuth) return false
         bf.declareDomains(name, [domain])
