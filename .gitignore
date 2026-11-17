@@ -1,0 +1,15 @@
+# 内部设计文档——永不提交
+docs/
+
+# 依赖与本地数据
+node_modules/
+.env
+.env.*
+*.local.json
+data/
+
+# 系统杂项
+.DS_Store
+
+# 构建产物
+lib/

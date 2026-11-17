@@ -1,0 +1,7 @@
+# dsh-rss-news-zhuikan bundle patch.
+# id 必须与插件 export const name 一致。
+
+- insert:
+    - id: rss-news-zhuikan
+      name: 'dsh-rss-news-zhuikan'
+      config: {}

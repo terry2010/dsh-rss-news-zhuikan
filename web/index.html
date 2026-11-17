@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>追看 · 列表页订阅</title>
+<style>
+:root{--bd:#d8dee4;--fg:#1f2328;--mut:#6e7781;--acc:#0969da;--ok:#1a7f37;--warn:#9a6700;--bad:#cf222e;--bg:#f6f8fa}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,"SF Pro",Segoe UI,sans-serif;color:var(--fg);background:#fff}
+.wrap{max-width:960px;margin:0 auto;padding:16px}
+h1{font-size:18px;margin:0 0 4px}
+.sub{color:var(--mut);font-size:12px;margin-bottom:16px}
+.card{border:1px solid var(--bd);border-radius:8px;padding:14px;margin-bottom:14px;background:#fff}
+.card h2{font-size:14px;margin:0 0 10px}
+input[type=text],input[type=url]{width:100%;padding:7px 10px;border:1px solid var(--bd);border-radius:6px;font:inherit}
+input[type=number]{width:80px;padding:5px 8px;border:1px solid var(--bd);border-radius:6px;font:inherit}
+button{padding:7px 14px;border:1px solid var(--bd);border-radius:6px;background:#fff;cursor:pointer;font:inherit}
+button.primary{background:var(--acc);color:#fff;border-color:var(--acc)}
+button:disabled{opacity:.45;cursor:default}
+button.sm{padding:3px 9px;font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.grow{flex:1}
+.mut{color:var(--mut)} .sm{font-size:12px}
+.chip{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;background:var(--bg);border:1px solid var(--bd);margin-right:4px}
+.chip.ok{background:#dafbe1;border-color:#aceebb;color:var(--ok)}
+.chip.warn{background:#fff8c5;border-color:#eac54f;color:var(--warn)}
+.chip.bad{background:#ffebe9;border-color:#ffb3ae;color:var(--bad)}
+.region{border:1px solid var(--bd);border-radius:8px;padding:10px 12px;margin:8px 0}
+.region.off{opacity:.5}
+.region .samples{color:var(--mut);font-size:12px;margin:6px 0 0 24px;padding:0;list-style:none}
+.region .samples li{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:600;font-size:12px}
+a{color:var(--acc);text-decoration:none}
+.err{color:var(--bad);font-size:12px;margin-top:6px}
+.spin{color:var(--mut);font-size:12px}
+.site-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.site-head b{font-size:14px}
+details summary{cursor:pointer;color:var(--mut);font-size:12px}
+.tag{float:right}
+.notice{background:#fff8c5;border:1px solid #eac54f;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>追看</h1>
+<div class="sub">粘贴列表页地址，AI 学习页面结构生成订阅规则；新条目进入新闻列表并按关键词推送。</div>
+<div id="llmwarn" class="notice" style="display:none">⚠ LLM 服务不可用——先在 dsh 配置模型供应商，否则无法生成规则。</div>
+
+<div class="card">
+<h2>添加订阅</h2>
+<div class="row">
+  <input id="addUrl" class="grow" type="url" placeholder="https://example.com/list — 列表页地址">
+  <input id="addLabel" style="width:140px" type="text" placeholder="来源名（可选）">
+  <input id="addProxy" style="width:170px" type="text" placeholder="代理 http://…（可选）">
+  <button id="btnPreview" class="primary">分析页面</button>
+</div>
+<div id="previewErr" class="err"></div>
+<div id="previewBox"></div>
+</div>
+
+<div class="card">
+<h2>订阅站点</h2>
+<div id="sites"><div class="mut sm">加载中…</div></div>
+</div>
+
+<div class="card">
+<h2>关键词订阅 <span class="mut sm">——配了词只推命中项；某站完全无适用词时推该站全部更新</span></h2>
+<div class="row" style="margin-bottom:8px">
+  <input id="termText" class="grow" type="text" placeholder="关键词（大小写不敏感子串匹配：标题+分类+板块）">
+  <select id="termSite"><option value="0">全局</option></select>
+  <button id="btnTerm">添加</button>
+</div>
+<table id="termsTbl"><thead><tr><th>词</th><th>作用域</th><th></th></tr></thead><tbody></tbody></table>
+</div>
+
+<div class="card">
+<h2>命中记录</h2>
+<table id="hitsTbl"><thead><tr><th>时间</th><th>词</th><th>标题</th><th>置信</th></tr></thead><tbody></tbody></table>
+</div>
+</div>
+<script>
+const API='/dsh-rss-news-zhuikan/api'
+const $=(s)=>document.querySelector(s)
+const esc=(s)=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+async function call(path,body){
+  const r=await fetch(API+path,{method:body?'POST':'GET',headers:body?{'content-type':'application/json'}:{},body:body?JSON.stringify(body):undefined})
+  return r.json()
+}
+let SITES=[],TERMS=[],PENDING_PREVIEW=null
+
+/* ---------- 加站：预览 ---------- */
+$('#btnPreview').onclick=async()=>{
+  const url=$('#addUrl').value.trim()
+  if(!url)return
+  $('#previewErr').textContent=''
+  $('#previewBox').innerHTML='<div class="spin">抓取页面 + AI 分析中（可能 10-30 秒）…</div>'
+  $('#btnPreview').disabled=true
+  try{
+    const r=await call('/preview',{url,proxy:$('#addProxy').value.trim()||undefined})
+    $('#btnPreview').disabled=false
+    if(!r.ok){$('#previewBox').innerHTML='';$('#previewErr').textContent=r.error||'分析失败';if(r.rawTail)$('#previewErr').textContent+=' | 模型输出尾:'+r.rawTail.slice(-200);return}
+    PENDING_PREVIEW={url,label:$('#addLabel').value.trim(),rule:r.rule,proxy:$('#addProxy').value.trim()||undefined}
+    renderPreview(r)
+  }catch(e){$('#btnPreview').disabled=false;$('#previewBox').innerHTML='';$('#previewErr').textContent=String(e)}
+}
+function renderPreview(r){
+  const multi=r.groups.length>1
+  let h=`<div class="mut sm" style="margin:10px 0 4px">识别方式：${esc(r.rule.type)} — 找到 ${r.groups.length} 个列表区域，勾选要订阅的：</div>`
+  r.groups.forEach((g,i)=>{
+    const samples=g.items.slice(0,10).map(it=>`<li>· ${esc(it.title)}${it.pubTime?` <span class="mut">${esc(it.pubTime)}</span>`:''}</li>`).join('')
+    h+=`<div class="region" data-i="${i}">
+      <label class="row"><input type="checkbox" class="rgchk" data-i="${i}" checked>
+      <b>${esc(g.label||'列表 '+(i+1))}</b>
+      ${g.byIndex?'<span class="chip warn">按位置圈选，改版易失效</span>':''}
+      <span class="chip">${g.count} 条</span>
+      ${g.count<3&&g.count>0?'<span class="chip warn">条目较少</span>':''}
+      ${!g.count?'<span class="chip bad">未抽到条目</span>':''}</label>
+      <ul class="samples">${samples||'<li>（无样例）</li>'}</ul></div>`
+  })
+  h+=`<div class="row" style="margin-top:10px">
+    ${multi?'<button class="sm" id="selAll">全选</button><button class="sm" id="selNone">全不选</button>':''}
+    <span class="grow"></span>
+    <button class="primary" id="btnConfirm">启用订阅 →</button></div>`
+  $('#previewBox').innerHTML=h
+  const sync=()=>{document.querySelectorAll('.region').forEach(el=>el.classList.toggle('off',!el.querySelector('.rgchk').checked))
+    $('#btnConfirm').disabled=![...document.querySelectorAll('.rgchk')].some(c=>c.checked)}
+  document.querySelectorAll('.rgchk').forEach(c=>c.onchange=sync);sync()
+  if($('#selAll'))$('#selAll').onclick=()=>{document.querySelectorAll('.rgchk').forEach(c=>{c.checked=true});sync()}
+  if($('#selNone'))$('#selNone').onclick=()=>{document.querySelectorAll('.rgchk').forEach(c=>{c.checked=false});sync()}
+  $('#btnConfirm').onclick=async()=>{
+    const picked=[...document.querySelectorAll('.rgchk')].filter(c=>c.checked).map(c=>+c.dataset.i)
+    const body={url:PENDING_PREVIEW.url,label:PENDING_PREVIEW.label,rule:PENDING_PREVIEW.rule,regions:picked,proxy:PENDING_PREVIEW.proxy}
+    const r2=await call('/site/add',body)
+    if(r2.ok){$('#previewBox').innerHTML='<div class="chip ok">已启用，正在做首轮抓取…</div>';PENDING_PREVIEW=null;load()}
+    else $('#previewErr').textContent=r2.error||'启用失败'
+  }
+}
+
+/* ---------- 站点列表 ---------- */
+const ST={active:['ok','正常'],degraded:['warn','疑似改版'],rules_pending:['warn','待确认新规则'],disabled:['','已停用']}
+function siteCard(s){
+  const[cls,txt]=ST[s.status]||['','?']
+  const regions=s.rules.type==='css'&&s.rules.regions?s.rules.regions.map(r=>`<span class="chip">${esc(r.label)}</span>`).join(''):`<span class="chip">${esc(s.rules.type)}</span>`
+  const pend=s.pendingRules?`<div class="notice">有新规则待确认（疑似改版后重新分析结果） <button class="sm primary" onclick="confirmRules(${s.id})">查看并确认</button> <button class="sm" onclick="op(${s.id},'reject-rules')">拒绝</button></div>`:''
+  return `<div class="region">
+    <div class="site-head">
+      <b>${esc(s.label||s.url)}</b>
+      <span class="chip ${cls}">${txt}</span>
+      ${s.transport!=='node'?`<span class="chip">${s.transport}</span>`:''}
+      ${s.proxy?`<span class="chip warn">代理</span>`:''}
+      ${regions}
+      <span class="grow"></span>
+      <span class="mut sm">${s.itemCount} 条入库${s.lastPollAt?` · 上次 ${new Date(s.lastPollAt).toLocaleString()}`:''}</span>
+    </div>
+    <div class="sm mut"><a href="${esc(s.url)}" target="_blank">${esc(s.url)}</a></div>
+    ${pend}
+    <div class="row" style="margin-top:6px">
+      <button class="sm" onclick="op(${s.id},'${s.enabled?'disable':'enable'}')">${s.enabled?'停用':'启用'}</button>
+      <button class="sm" onclick="reanalyze(${s.id})">重新分析</button>
+      <button class="sm" onclick="renameSite(${s.id},'${esc(s.label)}')">改名</button>
+      <label class="sm mut">间隔 <input type="number" id="iv${s.id}" value="${Math.round(s.intervalS/60)}" min="5"> 分钟
+      <button class="sm" onclick="setIv(${s.id})">存</button></label>
+      <span class="grow"></span>
+      <button class="sm" onclick="viewItems(${s.id})">条目</button>
+      <button class="sm" style="color:var(--bad)" onclick="delSite(${s.id})">删除</button>
+    </div>
+    <div id="items${s.id}"></div>
+  </div>`
+}
+async function load(){
+  const r=await call('/sites')
+  $('#llmwarn').style.display=r.llmReady?'none':'block'
+  SITES=r.sites||[]
+  $('#sites').innerHTML=SITES.length?SITES.map(siteCard).join(''):'<div class="mut sm">还没有订阅站点——在上面粘贴一个列表页地址开始。</div>'
+  $('#termSite').innerHTML='<option value="0">全局</option>'+SITES.map(s=>`<option value="${s.id}">${esc(s.label||s.url)}</option>`).join('')
+  loadTerms();loadHits()
+}
+window.op=async(id,op,extra)=>{await call('/site/op',{id,op,...extra});load()}
+window.delSite=async(id)=>{if(confirm('删除该订阅及其全部条目？'))op(id,'remove')}
+window.renameSite=async(id,cur)=>{const v=prompt('新名称',cur);if(v)op(id,'relabel',{label:v})}
+window.setIv=async(id)=>{op(id,'interval',{intervalS:+$('#iv'+CSS.escape(String(id))).value*60})}
+window.reanalyze=async(id)=>{
+  const r=await call('/site/op',{id,op:'reanalyze'})
+  if(!r.ok){alert('重新分析失败：'+(r.error||''));return}
+  showPending(id,r.groups)
+}
+window.confirmRules=async(id)=>{
+  const s=SITES.find(x=>x.id===id);if(!s||!s.pendingRules)return
+  const r=await call('/site/op',{id,op:'reanalyze'})
+  if(!r.ok){alert('预览失败：'+(r.error||''));return}
+  showPending(id,r.groups,r.site?.pendingRules)
+}
+function showPending(id,groups,rule){
+  const s=SITES.find(x=>x.id===id)
+  const r=rule||s?.pendingRules
+  let h=`<div class="region"><b>确认新规则</b> <span class="mut sm">（站点 ${esc(s?.label||id)}）</span>`
+  ;(groups||[]).forEach((g,i)=>{
+    h+=`<label class="row sm"><input type="checkbox" class="prchk" data-i="${i}" checked> ${esc(g.label||'列表 '+(i+1))} <span class="chip">${g.count}条</span></label>`
+  })
+  h+=`<div class="row" style="margin-top:6px"><button class="sm primary" onclick="applyPending(${id})">应用新规则</button>
+      <button class="sm" onclick="op(${id},'reject-rules')">拒绝</button></div></div>`
+  document.querySelector(`#items${id}`).innerHTML=h
+}
+window.applyPending=async(id)=>{
+  const s=SITES.find(x=>x.id===id);const r=s?.pendingRules;if(!r)return
+  const picked=[...document.querySelectorAll('.prchk')].filter(c=>c.checked).map(c=>+c.dataset.i)
+  await call('/site/op',{id,op:'confirm-rules',rule:r,regions:picked});load()
+}
+window.viewItems=async(id)=>{
+  const box=document.querySelector(`#items${id}`)
+  if(box.dataset.open){box.innerHTML='';delete box.dataset.open;return}
+  const r=await call('/items?site_id='+id)
+  box.dataset.open='1'
+  box.innerHTML='<table class="sm"><tbody>'+r.items.map(it=>
+    `<tr><td class="mut">${esc((it.first_seen||'').slice(0,16).replace('T',' '))}</td>
+     <td>${it.link?`<a href="${esc(it.link)}" target="_blank">${esc(it.title)}</a>`:esc(it.title)}</td>
+     <td class="mut">${esc(it.region||'')}</td><td class="mut">${esc(it.category||'')}</td>
+     <td class="mut">${esc(it.pub_time||'')}</td><td class="mut">${it.views??''}</td></tr>`).join('')+'</tbody></table>'
+}
+
+/* ---------- 词表 ---------- */
+async function loadTerms(){
+  const r=await call('/terms');TERMS=r.terms||[]
+  $('#termsTbl tbody').innerHTML=TERMS.map(t=>{
+    const scope=t.site_id===0?'全局':esc((SITES.find(s=>s.id===t.site_id)||{}).label||('#'+t.site_id))
+    return `<tr><td>${esc(t.term)}</td><td>${scope}</td>
+      <td><button class="sm" onclick="delTerm(${t.id})">删</button></td></tr>`}).join('')
+}
+$('#btnTerm').onclick=async()=>{
+  const t=$('#termText').value.trim();if(!t)return
+  await call('/terms',{term:t,siteId:+$('#termSite').value});$('#termText').value='';loadTerms()
+}
+window.delTerm=async(id)=>{await call('/terms',{op:'remove',id});loadTerms()}
+
+/* ---------- 命中 ---------- */
+async function loadHits(){
+  const r=await call('/hits')
+  $('#hitsTbl tbody').innerHTML=(r.hits||[]).map(h=>{
+    const s=SITES.find(x=>x.id===h.site_id)
+    return `<tr><td class="mut">${esc((h.created_at||'').slice(0,16).replace('T',' '))}</td>
+      <td>${esc(h.term)}</td>
+      <td>${h.link?`<a href="${esc(h.link)}" target="_blank">${esc(h.title)}</a>`:esc(h.title)}
+        <span class="mut sm">${s?' @'+esc(s.label):''}</span></td>
+      <td class="mut">${esc(h.confidence)}</td></tr>`}).join('')||'<tr><td colspan="4" class="mut">暂无命中</td></tr>'
+}
+load()
+</script>
+</body>
+</html>
