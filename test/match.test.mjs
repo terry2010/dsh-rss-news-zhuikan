@@ -9,9 +9,9 @@ const item = (over = {}) => ({
 })
 const term = (t, site = 0) => ({ id: 1, site_id: site, term: t, group_name: '', created_at: '' })
 
-test('适用词集为空 → 全量推送', () => {
+test('适用词集为空 → 不推送', () => {
   const d = decidePush(item(), [])
-  assert.equal(d.push, true)
+  assert.equal(d.push, false)
   assert.deepEqual(d.terms, [])
 })
 

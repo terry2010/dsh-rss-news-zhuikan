@@ -1,7 +1,8 @@
 /**
  * 关键词订阅匹配 + 推送判定（docs/design.md §5.1）。
  * 按站独立判定：适用词集 = 全局词 + 该站站级词。
- *  - 适用词集为空 → 全量推送（订阅器本职）
+ *  - 适用词集为空 → 不推送（推送=关键词命中提醒；全部条目反正进全部新闻，
+ *    空词表全量推等于每轮骚扰）
  *  - 非空 → 只推命中项并写 hits；未命中安静入库
  */
 
@@ -21,7 +22,7 @@ export interface PushDecision {
   terms: string[]
 }
 export function decidePush(item: ItemRow, applicableTerms: TermRow[]): PushDecision {
-  if (!applicableTerms.length) return { push: true, terms: [] }
+  if (!applicableTerms.length) return { push: false, terms: [] }
   const terms = matchTerms(item, applicableTerms)
   return { push: terms.length > 0, terms }
 }
