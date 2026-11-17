@@ -126,7 +126,7 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
         const url = String(body.url ?? '').trim()
         if (!/^https?:\/\//.test(url)) return json(res, 400, { ok: false, error: 'url must be http(s)' })
         const proxy = String(body.proxy ?? '').trim() || undefined
-        if (proxy && !/^https?:\/\//.test(proxy)) return json(res, 400, { ok: false, error: 'proxy must be http(s)://' })
+        if (proxy && proxy !== '1' && !/^https?:\/\//.test(proxy)) return json(res, 400, { ok: false, error: 'proxy must be 1 (global) or http(s)://' })
         json(res, 200, { ok: true, jobId: deps.startPreview(url, proxy) })
       }),
     }),
@@ -171,7 +171,7 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
       handler: guard(async (req, res) => {
         if (req.method !== 'POST') return json(res, 405, { error: 'POST only' })
         const b = JSON.parse(await readBody(req) || '{}') as {
-          id?: number; op?: string; label?: string; intervalS?: number
+          id?: number; op?: string; label?: string; intervalS?: number; proxy?: string
         }
         const site = b.id ? db.site(b.id) : undefined
         if (!site) return json(res, 404, { ok: false, error: 'site not found' })
@@ -180,6 +180,11 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
           case 'disable': db.updateSite(site.id, { enabled: 0, status: 'disabled' }); break
           case 'remove': db.removeSite(site.id); await deps.syncSources(); return json(res, 200, { ok: true })
           case 'relabel': db.updateSite(site.id, { label: String(b.label ?? site.label) }); break
+          case 'proxy': {
+            const v = String(b.proxy ?? '').trim()
+            db.updateSite(site.id, { proxy: (v === '1' || v === 'true') ? '1' : (v || null) as never })
+            break
+          }
           case 'interval': {
             const s = Math.max(300, Math.min(86400, Number(b.intervalS) || site.interval_s))
             db.updateSite(site.id, { interval_s: s })

@@ -26,9 +26,13 @@ export interface FetchOpt {
   headers?: Record<string, string>
   method?: string
   body?: string
-  /** 站级代理（http://host:port）——node 档经 undici ProxyAgent；browser 档不支持（Chrome 进程级代理） */
+  /** 站级代理：'1'/'true' = 主插件全局代理（prefs.proxyUrl）；URL = 显式代理；空 = 直连 */
   proxy?: string
 }
+
+/** 站级 proxy 字段 → ctx.fetch 的 proxy 参数（'1'→true 走全局；URL 透传；空→undefined 直连） */
+const proxyArg = (p?: string): string | boolean | undefined =>
+  !p ? undefined : (p === '1' || p === 'true' || p === 'global') ? true : p
 
 export type Doc = Awaited<ReturnType<MethodCtx['fetch']>> & { transport?: string }
 
@@ -72,7 +76,7 @@ async function browserFirst(
 async function nodeThenBrowser(
   ctx: MethodCtx, bf: BrowserFetchLike | undefined, domain: string, url: string, opt?: FetchOpt,
 ): Promise<Doc> {
-  const r = await ctx.fetch(url, ctx.signal, { headers: opt?.headers, proxy: opt?.proxy || undefined })
+  const r = await ctx.fetch(url, ctx.signal, { headers: opt?.headers, proxy: proxyArg(opt?.proxy) })
   if (!('error' in r)) return { ...r, transport: 'node' }
   if (!bf) return r
   try {

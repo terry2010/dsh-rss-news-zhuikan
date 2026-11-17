@@ -54,7 +54,7 @@ details summary{cursor:pointer;color:var(--mut);font-size:12px}
 <div class="row">
   <input id="addUrl" class="grow" type="url" placeholder="https://example.com/list — 列表页地址">
   <input id="addLabel" style="width:140px" type="text" placeholder="来源名（可选）">
-  <input id="addProxy" style="width:170px" type="text" placeholder="代理 http://…（可选）">
+  <label class="sm mut" style="white-space:nowrap"><input id="addProxy" type="checkbox"> 走全局代理</label>
   <button id="btnPreview" class="primary">分析页面</button>
 </div>
 <div id="previewErr" class="err"></div>
@@ -100,7 +100,7 @@ $('#btnPreview').onclick=async()=>{
   $('#btnPreview').disabled=true
   const setProg=(t)=>{$('#previewErr').innerHTML=t}
   try{
-    const r0=await call('/preview',{url,proxy:$('#addProxy').value.trim()||undefined})
+    const r0=await call('/preview',{url,proxy:$('#addProxy').checked?'1':undefined})
     if(!r0.ok){setProg(esc(r0.error||'启动失败'));$('#btnPreview').disabled=false;return}
     let job,r
     for(;;){ // 轮询任务进度：服务端逐步上报
@@ -115,7 +115,7 @@ $('#btnPreview').onclick=async()=>{
       if(r.needsAuth)m+=` <button class="sm primary" onclick="openAuth('${esc(url)}')">打开浏览器登录</button>`
       setProg(m);return}
     setProg('')
-    PENDING_PREVIEW={url,label:$('#addLabel').value.trim(),rule:r.rule,proxy:$('#addProxy').value.trim()||undefined}
+    PENDING_PREVIEW={url,label:$('#addLabel').value.trim(),rule:r.rule,proxy:$('#addProxy').checked?'1':undefined}
     renderPreview(r)
   }catch(e){$('#btnPreview').disabled=false;$('#previewBox').innerHTML='';setProg(esc(String(e)))}
 }
@@ -183,6 +183,7 @@ function siteCard(s){
       <button class="sm" onclick="renameSite(${s.id},'${esc(s.label)}')">改名</button>
       <label class="sm mut">间隔 <input type="number" id="iv${s.id}" value="${Math.round(s.intervalS/60)}" min="5"> 分钟
       <button class="sm" onclick="setIv(${s.id})">存</button></label>
+      <label class="sm mut"><input type="checkbox" ${s.proxy?'checked':''} onchange="call('/site/op',{id:${s.id},op:'proxy',proxy:this.checked?'1':''}).then(loadSites)"> 代理</label>
       <span class="grow"></span>
       <button class="sm" onclick="viewItems(${s.id})">条目</button>
       <button class="sm" style="color:var(--bad)" onclick="delSite(${s.id})">删除</button>
