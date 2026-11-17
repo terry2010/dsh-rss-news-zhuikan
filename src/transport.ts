@@ -51,13 +51,18 @@ export async function getDoc(
       doc = { url, status: b.status, body: b.body, transport: 'browser' }
     } catch { /* bf.fetch 挂 → 继续尝试渲染档 */ }
   }
-  // 仍挑战或疑似 JS 壳页 → 渲染档（有 bf.renderHtml 时）：导航真页面等 JS 自己跑完
+  // 仍挑战或疑似 JS 壳页 → 渲染档（有 bf.renderHtml 时）：导航真页面等 JS 自己跑完。
+  // 挑战页再补一次渲染：Chrome 冷启动/会话 cookie 过期后的首轮渲染常落在 PoW 解题中，
+  // 第二次导航时解出的 cookie 已入罐，多数直接放行。
   if (bf?.renderHtml && !('error' in doc) && (looksLikeChallenge(doc.body ?? '', doc.status) || looksLikeShell(doc.body ?? ''))) {
-    try {
-      const r = await bf.renderHtml(domain, url, { waitMs: 8000 })
-      if (r.html) return { url: r.url, status: r.status, body: r.html, transport: 'render' }
-      doc = { url: r.url, status: r.status, body: r.html || doc.body, transport: 'render' }
-    } catch { /* 渲染档挂 → 落回原 doc，调用方按挑战/壳页处理 */ }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await bf.renderHtml(domain, url, { waitMs: attempt === 0 ? 8000 : 15000 })
+        if (r.html && !looksLikeChallenge(r.html, r.status)) return { url: r.url, status: r.status, body: r.html, transport: 'render' }
+        doc = { url: r.url, status: r.status, body: r.html || doc.body, transport: 'render' }
+        if (!looksLikeChallenge(doc.body ?? '', doc.status)) return doc
+      } catch { break /* 渲染档挂 → 落回原 doc，调用方按挑战/壳页处理 */ }
+    }
   }
   return doc
 }
