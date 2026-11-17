@@ -102,7 +102,7 @@ function bootstrap(ctx: Context, log: Log) {
   const syncSources = async (opts?: { rebuild?: boolean }) => {
     if (opts?.rebuild) await ctx.rndSources.removeSources(name)
     const defs: SourceDef[] = db.sites().filter((s) => s.enabled === 1).map((s) => ({
-      url: s.url, title: s.label || s.url, method: METHOD,
+      url: s.url, title: `[追]${s.label || s.url}`, method: METHOD,
       category: '追看', tier: 2, lang: 'zh', enabled: true,
       summarize: false,
     }))
