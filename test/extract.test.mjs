@@ -64,6 +64,21 @@ test('css: 无 regions 全页抽取', () => {
   assert.equal(r.items.length, 4)
 })
 
+test('css: link 兜底——map.link 坏时回退 title 元素 a、再退 item 首个 a', () => {
+  const html = `<ul><li class="row">
+    <div class="li-img"><span class="cov"><i></i></span></div>
+    <div class="li-bottom"><h3><a href="/post/42">无 href 靠 title 救</a></h3></div></li>
+    <li class="row"><span class="wrap-a"><a href="/post/7">首个 a 兜底</a></span><h3 class="t2">纯文本标题</h3></li></ul>`
+  const rule = {
+    type: 'css', item: 'li.row',
+    map: { title: 'h3 a, .t2', link: '.li-img cover a' }, // link sel 是坏选择器（复现 gamer 站规则）
+  }
+  const r = extract(rule, html, SITE)
+  assert.equal(r.items.length, 2)
+  assert.equal(r.items[0].link, 'https://forum.example.com/post/42')
+  assert.equal(r.items[1].link, 'https://forum.example.com/post/7')
+})
+
 test('css: 跨区域去重（同 link 只记首个 region）', () => {
   const html = `<div class="a"><ul><li><a href="/t/9">重复帖</a></li></ul></div>
     <div class="b"><ul><li><a href="/t/9">重复帖</a></li></ul></div>`

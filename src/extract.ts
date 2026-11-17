@@ -198,12 +198,20 @@ export function extractCss(rule: CssRule, html: string, siteUrl: string): Extrac
         const titleEl = item.is(rule.map.title) ? item : item.find(rule.map.title).first()
         const title = (titleEl.text() || '').replace(/\s+/g, ' ').trim()
         if (!title) return
-        const linkSel = rule.map.link ?? rule.map.title
-        const linkEl = item.is('a') ? item
-          : item.find(linkSel).filter((_, e) => (e as { tagName?: string }).tagName === 'a' || $(e).find('a').length > 0).first()
-        const a = linkEl.is('a') ? linkEl : linkEl.find('a').first()
-        const link = abs(a.attr('href'), siteUrl)
-        const id = textOf($, item, rule.map.id) ?? a.attr('data-id') ?? null
+        // link 四级兜底（按“取到链接值”短路）：map.link 元素 → title 元素自身/内 a → item 首个 a；
+        // attr 依次 href → data-href/data-url/data-link（SPA 站常无 href 用 data-* 或 onclick）
+        const rawOf = (el: Cheerio<AnyNode> | undefined): string | undefined => {
+          if (!el || !el.length) return undefined
+          const a = el.is('a') ? el : el.find('a').first()
+          const node = a.length ? a : el
+          return node.attr('href') ?? node.attr('data-href') ?? node.attr('data-url') ?? node.attr('data-link')
+        }
+        const raw =
+          rawOf(rule.map.link ? item.find(rule.map.link).first() : undefined) ??
+          rawOf(titleEl) ??
+          rawOf(item.is('a') ? item : item.find('a').first())
+        const link = abs(raw, siteUrl)
+        const id = textOf($, item, rule.map.id) ?? item.find('[data-id]').first().attr('data-id') ?? null
         const pubTime = textOf($, item, rule.map.time)
         const pubTs = parseTime(pubTime)
         const dedupeKey = id ? `id:${id}` : link ? `link:${link}` : `h:${sha1(`${title}|${pubTime ?? ''}`)}`

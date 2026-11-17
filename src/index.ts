@@ -108,10 +108,10 @@ function bootstrap(ctx: Context, log: Log) {
     declareSiteDomains()
   }
 
-  const toRaw = (it: ZkItem, siteId: number): RawItem => ({
+  const toRaw = (it: ZkItem, siteId: number, siteUrl: string): RawItem => ({
     id: `zk${siteId}:${it.dedupeKey}`,
     title: it.title,
-    link: it.link ?? undefined,
+    link: it.link ?? siteUrl, // 无 href 的 JS 跳转站：兜底到列表页，点击至少有去处
     summary: it.extra ?? it.category ?? undefined,
     publishedAt: it.pubTs ? new Date(it.pubTs).toISOString() : undefined,
   })
@@ -146,7 +146,7 @@ function bootstrap(ctx: Context, log: Log) {
         : `${pushTitles.length} 条更新：${pushTitles.slice(0, 3).join('；')}${pushTitles.length > 3 ? '…' : ''}`
       try { ctx.rndSources.notify(title, body, `${BASE}/`) } catch { /* notify 尽力而为 */ }
     }
-    return { raws: items.map((it) => toRaw(it, siteId)), pushed: pushTitles.length, hits }
+    return { raws: items.map((it) => toRaw(it, siteId, db.site(siteId)?.url ?? '')), pushed: pushTitles.length, hits }
   }
 
   // ---- method handler：主插件调度器每轮调它；per-site 节流在内 ----

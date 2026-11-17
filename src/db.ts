@@ -149,8 +149,13 @@ export class ZkDb {
   }
 
   // ---- items ----
-  /** INSERT OR IGNORE；返回真正新入库的行数。 */
+  /** INSERT OR IGNORE；返回真正新入库的行数。
+   *  除 dedupe_key 外另做 title+pub_ts 软去重——规则改良（如补上 link）换 key 时不重复入库。 */
   insertItem(it: Omit<ItemRow, 'id'>): boolean {
+    const dup = this.d.prepare(
+      `SELECT 1 FROM items WHERE site_id=? AND title=? AND pub_ts IS NOT DISTINCT FROM ? LIMIT 1`,
+    ).get(it.site_id, it.title, it.pub_ts)
+    if (dup) return false
     const r = this.d.prepare(
       `INSERT OR IGNORE INTO items(site_id,dedupe_key,title,link,pub_time,pub_ts,views,category,region,extra_json,first_seen)
        VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
