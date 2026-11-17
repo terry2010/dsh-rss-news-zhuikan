@@ -150,18 +150,28 @@ export class ZkDb {
 
   // ---- items ----
   /** INSERT OR IGNORE；返回真正新入库的行数。
-   *  除 dedupe_key 外另做 title+pub_ts 软去重——规则改良（如补上 link）换 key 时不重复入库。 */
+   *  除 dedupe_key 外另做 title+pub_ts 软去重——规则改良（如补上 link）换 key 时不重复入库。
+   *  已存在的行做空字段回填：否则早期抽取缺 link 的行会永远停在 null（raws 每轮重抽是好的，
+   *  但本站条目列表展示的是这张表）。 */
   insertItem(it: Omit<ItemRow, 'id'>): boolean {
     const dup = this.d.prepare(
       `SELECT 1 FROM items WHERE site_id=? AND title=? AND pub_ts IS NOT DISTINCT FROM ? LIMIT 1`,
     ).get(it.site_id, it.title, it.pub_ts)
-    if (dup) return false
-    const r = this.d.prepare(
-      `INSERT OR IGNORE INTO items(site_id,dedupe_key,title,link,pub_time,pub_ts,views,category,region,extra_json,first_seen)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
-    ).run(it.site_id, it.dedupe_key, it.title, it.link, it.pub_time, it.pub_ts,
-      it.views, it.category, it.region, it.extra_json, it.first_seen)
-    return Number(r.changes) > 0
+    if (!dup) {
+      const r = this.d.prepare(
+        `INSERT OR IGNORE INTO items(site_id,dedupe_key,title,link,pub_time,pub_ts,views,category,region,extra_json,first_seen)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+      ).run(it.site_id, it.dedupe_key, it.title, it.link, it.pub_time, it.pub_ts,
+        it.views, it.category, it.region, it.extra_json, it.first_seen)
+      if (Number(r.changes) > 0) return true
+    }
+    this.d.prepare(
+      `UPDATE items SET link=COALESCE(link,?), pub_time=COALESCE(pub_time,?), pub_ts=COALESCE(pub_ts,?),
+         views=COALESCE(views,?), category=COALESCE(category,?), region=COALESCE(region,?), extra_json=COALESCE(extra_json,?)
+       WHERE site_id=? AND (dedupe_key=? OR (title=? AND pub_ts IS NOT DISTINCT FROM ?))`,
+    ).run(it.link, it.pub_time, it.pub_ts, it.views, it.category, it.region, it.extra_json,
+      it.site_id, it.dedupe_key, it.title, it.pub_ts)
+    return false
   }
   items(siteId: number | undefined, limit = 100, offset = 0): ItemRow[] {
     return siteId === undefined
