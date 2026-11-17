@@ -179,7 +179,7 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
           case 'enable': db.updateSite(site.id, { enabled: 1, status: site.status === 'disabled' ? 'active' : site.status }); break
           case 'disable': db.updateSite(site.id, { enabled: 0, status: 'disabled' }); break
           case 'remove': db.removeSite(site.id); await deps.syncSources(); return json(res, 200, { ok: true })
-          case 'relabel': db.updateSite(site.id, { label: String(b.label ?? site.label) }); break
+          case 'relabel': db.updateSite(site.id, { label: String(b.label ?? site.label) }); await deps.syncSources(); break
           case 'proxy': {
             const v = String(b.proxy ?? '').trim()
             db.updateSite(site.id, { proxy: (v === '1' || v === 'true') ? '1' : (v || null) as never })
