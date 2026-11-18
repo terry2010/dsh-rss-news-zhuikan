@@ -127,4 +127,7 @@ test('parseTime: ISO/中文相对/英相对/年月日', () => {
   assert.equal(parseTime('昨天', anchor) < anchor, true)
   assert.equal(parseTime('not a time', anchor), null)
   assert.equal(parseTime(null, anchor), null)
+  assert.equal(parseTime('2025-06-10T13:00:00Z', anchor), null) // 晚于抓取时刻 → 非发布时间
+  assert.equal(parseTime('2025-06-20', anchor), null)          // 未来日期同样丢弃
+  assert.equal(parseTime('2025-06-10T12:00:00.000Z', anchor), anchor) // 恰等于锚点保留
 })

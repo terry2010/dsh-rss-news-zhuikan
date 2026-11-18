@@ -45,6 +45,11 @@ const abs = (href: string | undefined | null, base: string): string | null => {
 
 /** 时间原文 → epoch ms。ISO/常见格式 + 中英相对时间（锚=抓取时刻）。 */
 export function parseTime(raw: string | null | undefined, anchor = Date.now()): number | null {
+  const ts = parseTimeRaw(raw, anchor)
+  return ts !== null && ts > anchor ? null : ts // 晚于抓取时刻=截止/定档日期等，非发布时间
+}
+
+function parseTimeRaw(raw: string | null | undefined, anchor: number): number | null {
   if (!raw) return null
   const s = raw.trim()
   if (!s) return null
