@@ -1,6 +1,6 @@
 {
   "name": "dsh-rss-news-zhuikan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "license": "Apache-2.0",
   "description": "dsh companion plugin: subscribe to ordinary list pages that have no RSS feed — AI learns the page structure, new items flow into the main news feed.",
   "type": "module",
