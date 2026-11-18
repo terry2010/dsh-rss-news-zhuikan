@@ -27,7 +27,7 @@
 
 ### 站点自己会"康复"
 
-规则因改版失效时，站点标为「疑似改版」，一键重新分析生成新规则、确认后接管。遇到登录墙/挑战页，可用专用浏览器开页登录或过人机校验，登录态之后自动复用。被墙站点勾选「走全局代理」即复用主插件的代理设置，不用单独填地址。
+规则因改版失效时，站点标为「疑似改版」，一键重新分析生成新规则、确认后接管。遇到需要登录或交互验证的站点，可在专用浏览器里像日常访问一样**手动**完成一次登录/验证，会话之后自动复用。被墙站点勾选「走全局代理」即复用主插件的代理设置，不用单独填地址。
 
 ## 使用方式
 
@@ -40,7 +40,8 @@
 
 - 站点、提取规则、条目、关键词与命中记录都保存在本机。
 - 生成提取规则时会调用你在 dsh 中配置的 AI 模型，发送的是页面结构摘要而非完整页面。
-- 登录类站点通过专用浏览器实例完成授权，cookie 留在本机浏览器 profile 里。
+- 登录类站点通过专用浏览器实例由你本人完成一次授权，cookie 留在本机浏览器 profile 里。
+- 本插件只访问你本可在浏览器中手动打开的公开页面；请自行确认并遵守目标站点的访问条款。
 
 ## 安装
 
@@ -62,7 +63,7 @@ node scripts/install-to-profile.mjs <profile>   # 装到 ~/.dsh/profiles/<profil
 
 - [dsh-rss-news-daily](https://github.com/terry2010/dsh-rss-news-daily) — 主插件：RSS 订阅 + AI 每日精选/快报阅读器
 - [dsh-rss-news-flash-kuaixun](https://github.com/terry2010/dsh-rss-news-flash-kuaixun) — 实时财经快讯聚合伴随插件
-- [dsh-rss-news-browser-fetch](https://github.com/terry2010/dsh-rss-news-browser-fetch) — 专用浏览器抓取服务（挑战页/登录态/JS 渲染兜底）
+- [dsh-rss-news-browser-fetch](https://github.com/terry2010/dsh-rss-news-browser-fetch) — 专用浏览器抓取服务（登录态/JS 渲染兼容兜底）
 
 ## License
 

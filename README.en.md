@@ -27,7 +27,7 @@ Attach keywords per site or globally. With keywords set, only matching new items
 
 ### Sites heal themselves
 
-If a site redesign breaks its rule, it's flagged "possibly redesigned" — re-analyze with one click and confirm the new rule to take over. Login walls and bot challenges open in a dedicated browser for one-time auth, reused automatically afterwards. Blocked sites inherit the main plugin's global proxy with a single checkbox.
+If a site redesign breaks its rule, it's flagged "possibly redesigned" — re-analyze with one click and confirm the new rule to take over. Sites that require login or interactive verification open in a dedicated browser where you complete sign-in/verification **manually once** — just like a normal visit — and the session is reused automatically afterwards. Blocked sites inherit the main plugin's global proxy with a single checkbox.
 
 ## Usage
 
@@ -40,7 +40,8 @@ If a site redesign breaks its rule, it's flagged "possibly redesigned" — re-an
 
 - Sites, rules, items, keywords and hits are stored locally.
 - Rule generation calls the AI model you configured in dsh, sending a structural summary of the page — not the full HTML.
-- Authenticated sites are handled through a dedicated browser instance; cookies stay in a local browser profile.
+- Authenticated sites complete a one-time authorization **by you** in a dedicated browser instance; cookies stay in a local browser profile.
+- This plugin only accesses public pages you could open manually in a browser; please review and comply with each target site's terms of access.
 
 ## Install
 
@@ -57,7 +58,7 @@ node scripts/install-to-profile.mjs <profile>   # install to ~/.dsh/profiles/<pr
 
 - [dsh-rss-news-daily](https://github.com/terry2010/dsh-rss-news-daily) — main plugin: RSS reader with AI daily digest & hourly briefs
 - [dsh-rss-news-flash-kuaixun](https://github.com/terry2010/dsh-rss-news-flash-kuaixun) — real-time finance flash-news companion
-- [dsh-rss-news-browser-fetch](https://github.com/terry2010/dsh-rss-news-browser-fetch) — dedicated-browser fetch service (challenge/login/render fallback)
+- [dsh-rss-news-browser-fetch](https://github.com/terry2010/dsh-rss-news-browser-fetch) — dedicated-browser fetch service (login/render compatibility fallback)
 
 ## License
 
