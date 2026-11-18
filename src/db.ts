@@ -196,6 +196,12 @@ export class ZkDb {
       'INSERT OR IGNORE INTO watch_terms(site_id,term,group_name,created_at) VALUES(?,?,?,?)',
     ).run(siteId, term, group, new Date().toISOString())
   }
+  updateTerm(id: number, term: string, siteId = 0): 'ok' | 'dup' | 'gone' {
+    const dup = this.d.prepare('SELECT id FROM watch_terms WHERE site_id=? AND term=? AND id<>?').get(siteId, term, id)
+    if (dup) return 'dup'
+    const r = this.d.prepare('UPDATE watch_terms SET term=?, site_id=? WHERE id=?').run(term, siteId, id)
+    return r.changes ? 'ok' : 'gone'
+  }
   removeTerm(id: number): void {
     this.d.prepare('DELETE FROM watch_terms WHERE id=?').run(id)
   }

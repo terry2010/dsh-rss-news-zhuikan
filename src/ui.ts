@@ -227,13 +227,18 @@ export function mountUi(ws: WebServerLike, deps: UiDeps): () => void {
       }),
     }),
 
-    // 词表：GET 全量；POST {term, siteId?, group?} 增；POST remove {id}
+    // 词表：GET 全量；POST {term, siteId?, group?} 增；POST update {id, term, siteId?} 改；POST remove {id}
     ws.register({
       kind: 'exact', path: `${BASE}/api/terms`,
       handler: guard(async (req, res) => {
         if (req.method === 'GET') return json(res, 200, { ok: true, terms: db.terms() })
         const b = JSON.parse(await readBody(req) || '{}') as { op?: string; id?: number; term?: string; siteId?: number; group?: string }
         if (b.op === 'remove' && b.id) db.removeTerm(b.id)
+        else if (b.op === 'update' && b.id && b.term?.trim()) {
+          const r = db.updateTerm(b.id, b.term.trim(), Number(b.siteId) || 0)
+          if (r === 'dup') return json(res, 200, { ok: false, error: '该作用域下已存在同名关键词', terms: db.terms() })
+          if (r === 'gone') return json(res, 200, { ok: false, error: '关键词已不存在', terms: db.terms() })
+        }
         else if (b.term?.trim()) db.addTerm(b.term.trim(), Number(b.siteId) || 0, String(b.group ?? '').trim())
         json(res, 200, { ok: true, terms: db.terms() })
       }),

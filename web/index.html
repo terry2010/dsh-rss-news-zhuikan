@@ -258,18 +258,34 @@ window.viewItems=async(id)=>{
 }
 
 /* ---------- 词表 ---------- */
+let EDIT_TERM=0
+const scopeName=id=>id===0?'全局':esc((SITES.find(s=>s.id===id)||{}).label||('#'+id))
+const scopeOpts=cur=>`<option value="0"${cur===0?' selected':''}>全局</option>`
+  +SITES.map(s=>`<option value="${s.id}"${s.id===cur?' selected':''}>${esc(s.label||s.url)}</option>`).join('')
 async function loadTerms(){
   const r=await call('/terms');TERMS=r.terms||[]
   $('#termsTbl tbody').innerHTML=TERMS.map(t=>{
-    const scope=t.site_id===0?'全局':esc((SITES.find(s=>s.id===t.site_id)||{}).label||('#'+t.site_id))
-    return `<tr><td>${esc(t.term)}</td><td>${scope}</td>
-      <td><button class="sm" onclick="delTerm(${t.id})">删</button></td></tr>`}).join('')
+    if(t.id===EDIT_TERM)
+      return `<tr><td><input id="editTermText" type="text" value="${esc(t.term)}" style="width:100%"></td>
+        <td><select id="editTermSite">${scopeOpts(t.site_id)}</select></td>
+        <td style="white-space:nowrap"><button class="sm primary" onclick="saveTerm(${t.id})">存</button>
+        <button class="sm" onclick="EDIT_TERM=0;loadTerms()">取消</button></td></tr>`
+    return `<tr><td>${esc(t.term)}</td><td>${scopeName(t.site_id)}</td>
+      <td style="white-space:nowrap"><button class="sm" onclick="editTerm(${t.id})">改</button>
+      <button class="sm" onclick="delTerm(${t.id})">删</button></td></tr>`}).join('')
+}
+window.editTerm=id=>{EDIT_TERM=id;loadTerms()}
+window.saveTerm=async(id)=>{
+  const term=$('#editTermText').value.trim();if(!term)return
+  const r=await call('/terms',{op:'update',id,term,siteId:+$('#editTermSite').value})
+  if(r.ok===false){alert(r.error||'保存失败');return}
+  EDIT_TERM=0;loadTerms()
 }
 $('#btnTerm').onclick=async()=>{
   const t=$('#termText').value.trim();if(!t)return
   await call('/terms',{term:t,siteId:+$('#termSite').value});$('#termText').value='';loadTerms()
 }
-window.delTerm=async(id)=>{await call('/terms',{op:'remove',id});loadTerms()}
+window.delTerm=async(id)=>{await call('/terms',{op:'remove',id});if(EDIT_TERM===id)EDIT_TERM=0;loadTerms()}
 
 /* ---------- 命中 ---------- */
 async function loadHits(){
