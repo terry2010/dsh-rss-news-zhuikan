@@ -2,11 +2,12 @@
   "name": "dsh-rss-news-zhuikan",
   "version": "0.1.0",
   "license": "Apache-2.0",
-  "description": "dsh companion plugin: subscribe to list pages without RSS — AI learns page rules, items flow into the main news feed.",
+  "description": "dsh companion plugin: subscribe to ordinary list pages that have no RSS feed — AI learns the page structure, new items flow into the main news feed.",
   "type": "module",
   "main": "lib/index.js",
   "files": [
     "lib",
+    "web",
     "cordis.patch.yml"
   ],
   "dsh": {
@@ -47,5 +48,24 @@
     "build": "tsc -p tsconfig.json && node scripts/bundle-vendor.mjs && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test test/*.test.mjs"
-  }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "rss",
+    "news",
+    "web-scraping",
+    "ai",
+    "feed",
+    "watchlist"
+  ],
+  "author": "terry2010 <jstel@126.com>",
+  "homepage": "https://github.com/terry2010/dsh-rss-news-zhuikan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/terry2010/dsh-rss-news-zhuikan.git"
+  },
+  "bugs": "https://github.com/terry2010/dsh-rss-news-zhuikan/issues"
 }
