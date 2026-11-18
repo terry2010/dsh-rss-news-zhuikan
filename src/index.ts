@@ -105,6 +105,9 @@ function bootstrap(ctx: Context, log: Log) {
       url: s.url, title: `[追]${s.label || s.url}`, method: METHOD,
       category: '追看', tier: 2, lang: 'zh', enabled: true,
       summarize: false,
+      // 追看=用户主动订阅，不吃 AI 管线；四旗标只在「首次注册」生效——
+      // upsert 只刷 provider 字段，用户在主插件 UI 改开的开关不会被覆盖
+      score: false, translate: false, brief: false, digest: false,
     }))
     if (defs.length) await ctx.rndSources.addSources(name, defs)
     declareSiteDomains()
